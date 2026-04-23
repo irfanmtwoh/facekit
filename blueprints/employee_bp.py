@@ -122,7 +122,7 @@ def all_employees():
     limit = data.get('limit')
     offset = data.get('offset')
     search = data.get('search') if data.get('search') else None
-    branch_id = data.get('branch_id')
+    branch_id = data.get('branch')
     if not compony_code:
         return jsonify({"message": "compony_code is requerd"})
 
