@@ -1,5 +1,6 @@
 from connection.db_officekit import get_db
 from model.database import get_database
+from utility.settings import Settings
 
 class AllEmp:
     def __init__(self, company_code):
@@ -9,8 +10,30 @@ class AllEmp:
         self.encoding_db = self.db[f"encodings_{company_code}"]
         
     def get_all_emp(self, offset=0, limit=10, search=None, branch_id=None):
+        sm = Settings(self.company_code)
+        enable_create_user = sm.get("Enable Create User")
+
         where_conditions = []
         where_params = []
+        
+        if enable_create_user:
+            existing_docs = list(self.encoding_db.find({}, {"employee_code": 1}))
+            existing_codes_all = [doc['employee_code'] for doc in existing_docs if doc.get('employee_code')]
+            
+            if not existing_codes_all:
+                return {"data": [], "total": 0, "offset": int(offset), "limit": int(limit)}
+            
+            # SQL Server parameter limit is 2100. Using 2000 for safety.
+            if len(existing_codes_all) <= 2000:
+                placeholders = ', '.join(['%s'] * len(existing_codes_all))
+                where_conditions.append(f"Emp_Code IN ({placeholders})")
+                where_params.extend(existing_codes_all)
+            else:
+                # If more than 2000, we use a subset to avoid SQL errors
+                subset = existing_codes_all[:2000]
+                placeholders = ', '.join(['%s'] * len(subset))
+                where_conditions.append(f"Emp_Code IN ({placeholders})")
+                where_params.extend(subset)
         
         if search:
             where_conditions.append("(Emp_Code LIKE %s OR First_Name LIKE %s)")
@@ -56,9 +79,13 @@ class AllEmp:
 
         data = []
         for row in rows:
+            is_exist = row['Emp_Code'] in existing_codes
+            if enable_create_user and not is_exist:
+                continue
+                
             data.append({
                 **row,
-                "exist": row['Emp_Code'] in existing_codes
+                "exist": is_exist
             })
 
         return {
