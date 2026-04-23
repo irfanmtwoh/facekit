@@ -2,16 +2,18 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import dotenv
 
+dotenv.load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_PATH = os.path.join(BASE_DIR, "..", "public", "templates", "email_template.html")
-ADMIN_TEMPLATE_PATH = os.path.join(BASE_DIR, "..", "public", "templates", "admin_template.html")
+
 
 
 def send_mail_with_template(to_email,  username, password, company_code, confirm_url):
-    sender_email = "muhamed.irfan.t@gmail.com"
-    sender_password = "vmlz yvrt kbtd zmzq"  # use App Password, not normal Gmail password
+    sender_email = os.getenv("SENDER_EMAIL")
+    sender_password = os.getenv("SENDER_APP_PASS")
     
     try:
         with open(TEMPLATE_PATH, "r", encoding="utf-8") as file:

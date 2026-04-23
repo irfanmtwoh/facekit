@@ -10,19 +10,31 @@ database = os.getenv("OFFICEKIT_DATABASE_NAME")
 username = os.getenv("OFFICEKIT_USERNAME")
 password = os.getenv("OFFICEKIT_PASS")
 port = int(os.getenv("OFFICEKIT_DB_PORT", "1433"))
-
+host=None
 
 def get_db(company_code=None):
-    if company_code == 'A100':
-        db_name = database
-    else:
-        db_name = os.getenv(f"EMPIRE_OFFICEKIT_DATABASE_NAME", database)
+    # Start with default credentials from .env
+    current_host = None
+    current_server = server
+    current_user = username
+    current_pass = password
+    current_db = database
+
+    # Switch to Empire credentials if it's NOT A100 (and not None)
+    # If you want Empire to be the default, you can adjust this logic
+    if company_code and company_code == 'A102':
+        current_db = os.getenv("EMPIRE_OFFICEKIT_DATABASE_NAME")
+        current_host = os.getenv("EMPIRE_OFFICEKIT_IP")
+        current_user = os.getenv("EMPIRE_OFFICEKIT_USER")
+        current_pass = os.getenv("EMPIRE_OFFICEKIT_PASS")
+        current_server = os.getenv("EMPIRE_OFFICEKIT_SERVER")
 
     return pymssql.connect(
-        server=server,
-        user=username,
-        password=password,
-        database=db_name,
+        host=current_host,
+        server=current_server,
+        user=current_user,
+        password=current_pass,
+        database=current_db,
         port=port,
         tds_version='7.4'
     )

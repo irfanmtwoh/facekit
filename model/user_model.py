@@ -69,7 +69,7 @@ class UserModel():
             user_id = editable_details.get('employee_code')
             user = collection.find_one(
                 {"employee_code": user_id})
-            if not user:
+            if not user and compony_code != 'A102':
                 return "Employee not exist"
 
             if action == 'E':
@@ -88,19 +88,35 @@ class UserModel():
                 fullname = editable_details.get('full_name', None)
 
                 _filter = {
-                    "_id": user.get("_id"),
+                    "employee_code": user_id,
                 }
+
+
+                # sdb = get_database("SettingsDB")
+                # sc = sdb[f"settings_{compony_code}"]
+                # va =sc.find_one({"List Employees"})
+                # if va:
+                #     data = {
+                #         "company_code": compony_code,
+                #         "employee_code": user_id,
+                #         "branch": branch,
+                #         "agency": agency,
+                #         "fullname": fullname
+                #         "encodings": 
+                #     }
+                #     collection.insert_one(data)
+                # else:
                 result = collection.update_one(_filter, {
-                    "$set": {
-                        "company_code": compony_code,
-                        "employee_code": user_id,
-                        "branch": branch,
-                        "agency": agency,
-                        "fullname": fullname
-                    }
+                        "$set": {
+                            "company_code": compony_code,
+                            "employee_code": user_id,
+                            "branch": branch,
+                            "agency": agency,
+                            "fullname": fullname
+                        }
                 })
 
-                if result.matched_count == 0:
+                if result.matched_count == 0 and result.upserted_id is None:
                     return "No document found to update"
 
                 return "success"

@@ -27,12 +27,12 @@ class FaceIndexManager:
         with self.modify_lock:
             db = get_database(self.company_code)
             collection = db[f'encodings_{self.company_code}']
-            sdb = get_database('SettingsDB')
-            settings = sdb[f'settings_{self.company_code}']
-            val = settings.find_one({
-                "setting_name": "Office Kit Integration"
-            })
-            value = val.get("value")
+            # sdb = get_database('SettingsDB')
+            # settings = sdb[f'settings_{self.company_code}']
+            # val = settings.find_one({
+            #     "setting_name": "Office Kit Integration"
+            # })
+            # value = val.get("value")
 
             docs = list(collection.find({}, {
                 "encodings": 1,
@@ -57,20 +57,6 @@ class FaceIndexManager:
                 if enc and len(enc) == 128:
                     encodings.append(np.array(enc, dtype=np.float32))
                     valid_docs.append(doc)
-
-                # if value:
-                #     off = OfficeKitPunching()
-                #     emp_code = doc.get("employee_code")
-                #     branch = off.retreve_branche_by_user(emp_code)
-                #     if branch['branchId'] is not None:
-                #         collection.update_one(
-                #             {"_id": doc["_id"]},
-                #             {
-                #                 "$set": {
-                #                     "branch": branch['branchId'],
-                #                 }
-                #             }
-                #         )
 
             if not encodings:
                 self.index = None

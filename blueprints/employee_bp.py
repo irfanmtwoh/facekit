@@ -1,8 +1,11 @@
 from flask import Blueprint, request, jsonify
 from middleware.auth_middleware import jwt_required
 from model.user_model import UserModel
+from connection.all_emp import AllEmp
 from connection.validate_officekit import Validate
 from face_match.face_ml import FaceAttendance
+from model.database import get_database
+from utility.settings import Settings
 
 employee_bp = Blueprint('employee', __name__)
 attendance = FaceAttendance()
@@ -21,33 +24,41 @@ def add_employee_face():
     if not data:
         return jsonify({"message": "No JSON body received"}), 400
 
-    branch_requerd = False
-    office_kit_user = False
-    for settings in user.get("settings", []):
-        if settings.get("setting_name") == "Branch Management":
-            branch_requerd = settings.get("value", False)
-            branch = data.get('branch')
-            if branch_requerd and not branch:
-                return jsonify({"message": "Branch is requerd"})
-        if settings.get("setting_name") == "Agency Management":
-            agency_requerd = settings.get("value", False)
-            agency = data.get('agency')
-            if agency_requerd and not agency:
-                return jsonify({"message": "Agency is requerd"})
 
-        if settings.get("setting_name") == "Office Kit Integration" and settings.get("value"):
-            office_kit_user = True
+    sm = Settings(compony_code)
+    branch_requerd = sm.get("Branch Management")
+    agency_requerd = sm.get("Agency Management")
+    office_kit_user = sm.get("Office Kit Integration")
+    employeecode_requerd = sm.get("Employee Code")
+    
+    branch = data.get('branch')
+    agency = data.get('agency')
+    employeecode = data.get('employeecode')
 
-    if not all([fullname, employeecode, compony_code, base64, gender]):
-        return jsonify({"error": "Missing required fields"})
 
-    validate = Validate(compony_code, employeecode,
-                        isAdmin=user.get("is_admin", False))
-    validate_user, user_doc = validate.validate_employee()
-    if validate_user:
-        return jsonify({"message": "User already exists in Face Database"})
+    # Base required fields
+    required_fields = ["fullname", "base64", "gender"]
+    
+    # Dynamic required fields based on settings
+    if branch_requerd:
+        required_fields.append("branch")
+    if agency_requerd:
+        required_fields.append("agency")
+    if employeecode_requerd:
+        required_fields.append("employeecode")
+
+    missing_fields = [field for field in required_fields if not data.get(field)]
+    
+    if missing_fields:
+        return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+    # validate = Validate(compony_code, employeecode,
+    #                     isAdmin=user.get("is_admin", False))
+    # validate_user, user_doc = validate.validate_employee()
+    # if validate_user:
+    #     return jsonify({"message": "User already exists in Face Database"})
     status, message = attendance.update_face(
-        employee_code=employeecode, branch=branch, agency=agency, add_img=base64, company_code=compony_code, fullname=fullname, gender=gender, existing_office_kit_user=office_kit_user)
+         branch=branch, agency=agency, add_img=base64, company_code=compony_code, fullname=fullname, gender=gender, existing_office_kit_user=office_kit_user, employeecode=employeecode)
     message = message if message else "somthing went wrong"
     if status:
         return jsonify({"message": message})
@@ -65,16 +76,10 @@ def comare_face():
             "error": "JSON body error"
         }), 400
 
-    location_settings = False
-    individual_login = False
-    officekit_user = False
-    for settings in user.get("settings", []):
-        if settings.get("setting_name") == "Location Tracking":
-            location_settings = settings.get("value", False)
-        elif settings.get("setting_name") == "Individual Login":
-            individual_login = settings.get("value", False)
-        elif settings.get("setting_name") == "Office Kit Integration":
-            officekit_user = settings.get("value", False)
+    sm = Settings(user.get("compony_code"))
+    location_settings = sm.get("Location Tracking")
+    individual_login = sm.get("Individual Login")
+    officekit_user = sm.get("Office Kit Integration")
 
     latitude = 0
     longitude = 0
@@ -83,7 +88,7 @@ def comare_face():
         longitude = data.get('longitude')
 
         if not all([latitude, longitude]):
-            return jsonify({"message": "Missing data"}), 200
+            return jsonify({"message": "Location is required"}), 200
         try:
             latitude = float(latitude)
             longitude = float(longitude)
@@ -117,16 +122,12 @@ def all_employees():
     limit = data.get('limit')
     offset = data.get('offset')
     search = data.get('search') if data.get('search') else None
+    branch_id = data.get('branch_id')
     if not compony_code:
         return jsonify({"message": "compony_code is requerd"})
 
-    if not limit:
-        limit = 10
-    if not offset:
-        offset = 0
-    userdetails = UserModel(compony_code)
-    result = userdetails.get_all_users(
-        compony_code=compony_code, limit=limit, offset=offset, search=search)
+    userdetails = AllEmp(compony_code)
+    result = userdetails.get_all_emp(offset, limit, search, branch_id)
     return jsonify({"message": "success", "data": result})
 
 

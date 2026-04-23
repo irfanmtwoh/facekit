@@ -62,10 +62,6 @@ def update_status():
     return jsonify({"message": "success"})
 
 
-@admin.route('/dashboard')
-def dashboard():
-    return render_template('admin_template.html')
-
 @admin.route('/dashboard-stats', methods=['GET'])
 @jwt_required
 def dashboard_stats():
@@ -107,29 +103,51 @@ def live_logs():
 
     def generate():
         log_file = "logs/facekit.log"
-        if not os.path.exists(log_file):
-            yield "data: Log file not found\n\n"
-            return
-            
         import collections
-        with open(log_file, "r") as f:
-            # Read the file and keep only the last 10 lines in memory
-            last_lines = collections.deque(f, maxlen=100)
+        
+        # 1. Provide Initial Context (Last 100 lines)
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                    last_lines = collections.deque(f, maxlen=100)
+                    for line in last_lines:
+                        yield f"data: {line}\n\n"
+            except Exception as e:
+                yield f"data: Error reading initial logs: {str(e)}\n\n"
+
+        # 2. Enter Live Tailing Loop
+        last_pos = os.path.getsize(log_file) if os.path.exists(log_file) else 0
+        last_heartbeat = time.time()
+        
+        while True:
+            # Detect if file was rotated or truncated
+            if os.path.exists(log_file):
+                try:
+                    curr_size = os.path.getsize(log_file)
+                    if curr_size < last_pos:
+                        # File was truncated or rotated (replaced with smaller file)
+                        last_pos = 0 
+                    
+                    with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                        f.seek(last_pos)
+                        while True:
+                            line = f.readline()
+                            if not line:
+                                last_pos = f.tell()
+                                break
+                            yield f"data: {line}\n\n"
+                            last_heartbeat = time.time() # Reset heartbeat on data
+                except Exception:
+                    # Ignore temporary file access errors
+                    pass
             
-            for line in last_lines:
-                # Yield the last 10 lines to the frontend for immediate context
-                yield f"data: {line}\n\n"
-                
-            # Ensure the pointer is at the absolute end to begin tailing live
-            f.seek(0, os.SEEK_END)
-            while True:
-                line = f.readline()
-                if not line:
-                    # Sleep slightly if nothing is newly written, then try again
-                    time.sleep(0.5)
-                    continue
-                # SSE Event structure must be "data: <message>\n\n"
-                yield f"data: {line}\n\n"
+            # 3. Internal Keep-Alive Heartbeat (every 15s)
+            if time.time() - last_heartbeat > 5:
+                yield ": heartbeat\n\n"
+                last_heartbeat = time.time()
+            
+            # Small sleep to prevent CPU spiking, but low enough for "fully live" feel
+            time.sleep(0.1)
 
     # Set the mimetype to text/event-stream which activates SSE logic on the client browser
     return Response(generate(), mimetype='text/event-stream')

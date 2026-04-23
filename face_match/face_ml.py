@@ -8,6 +8,7 @@ from typing import Tuple, Dict, Any
 from functools import lru_cache
 from model.database import get_database
 from connection.validate_officekit import Validate
+from utility.settings import Settings
 import uuid
 from geopy.distance import geodesic
 from .faiss_manager import FaceIndexManager
@@ -15,7 +16,7 @@ import time
 import base64
 from connection.officekit_punching import OfficeKitPunching
 from connection.officekit_onboarding import OnboardingOfficekit
-
+from model.compony_model import ComponyModel
 WORKING_HOURES = 9
 WORKING_SECONDS = 9 * 60 * 60
 EXCEPTION_SECONDS = 300
@@ -153,7 +154,7 @@ class FaceAttendance:
             branch_name = employee.get("branch")
             db = get_database(company_code)
 
-            if company_code == "A100":
+            if Settings.get_setting(company_code, "Location Tracking"):
                 if branch_name:
                     if officekit_user:
                         off = OfficeKitPunching(company_code)
@@ -178,7 +179,7 @@ class FaceAttendance:
             traceback.print_exc()
             return False, "System error"
 
-    def update_face(self, employee_code, branch, agency, add_img, company_code, fullname, gender, existing_office_kit_user=False):
+    def update_face(self, branch, agency, add_img, company_code, fullname, gender, existing_office_kit_user=False, employeecode=None):
         try:
             try:
                 img_bytes = base64.b64decode(add_img)
@@ -190,6 +191,16 @@ class FaceAttendance:
                 return "Invalid image"
 
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+            # generate new employee code
+            compony = ComponyModel(compony_code=company_code)
+            if not employeecode:
+                employee_code = compony._generate_employee_code(company_code)
+            else:
+                # check existing employee code
+                employee_code = employeecode.strip() if employeecode else employeecode
+                if compony._check_employee_code(company_code, employee_code):
+                    return False, "This employee already exists"
             filename = f"user_{employee_code}_{branch}_{agency}_{fullname}_{company_code}.jpg"
             filepath = os.path.join(uploads_path, filename)
             cv2.imwrite(filepath, image)
@@ -238,10 +249,10 @@ class FaceAttendance:
                 "_id": result.inserted_id
             })
 
-            # if existing_office_kit_user:
-            add_user = OnboardingOfficekit(company_code)
-            add_user.add_user(employee_code, branch,
-                              agency, company_code, fullname, gender)
+            if Settings.get_setting(company_code, "Office Kit Onboarding"):
+                add_user = OnboardingOfficekit(company_code)
+                add_user.add_user(employee_code, branch,
+                            agency, company_code, fullname, gender)
             return True, "success"
 
         except Exception as e:
@@ -250,6 +261,7 @@ class FaceAttendance:
             return False, "System error during face update"
 
     def edit_employee_face(self, employee_code, emp_face, compony_code, existing_officekit_user=None):
+        employee_code = employee_code.strip() if employee_code else employee_code
         try:
             try:
                 img_bytes = base64.b64decode(emp_face)

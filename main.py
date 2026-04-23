@@ -151,9 +151,9 @@ def home():
 
 @app.route('/uploads/<path:filename>')
 def serve_uploads(filename):
-    return send_from_directory('face_match/uploads', filename)
+    return send_from_directory('face_match/uploads',filename)
 
 
 if __name__ == "__main__":
     init_faiss_indexes()
-    app.run(debug=True, port=5001, host="0.0.0.0")
+    app.run(debug=True, port=5002, host="0.0.0.0")
